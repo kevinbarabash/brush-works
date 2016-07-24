@@ -1,0 +1,27 @@
+{
+  "name": "brush-works",
+  "version": "0.0.1",
+  "description": "A WebGL based web app for painting.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack",
+    "watch": "webpack -w"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kevinbarabash/brush-works.git"
+  },
+  "author": "Kevin Barabash <kevinb7@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kevinbarabash/brush-works/issues"
+  },
+  "homepage": "https://github.com/kevinbarabash/brush-works#readme",
+  "devDependencies": {
+    "babel-core": "^6.11.4",
+    "babel-loader": "^6.2.4",
+    "shader-loader": "^1.1.4",
+    "webpack": "^1.13.1"
+  }
+}
