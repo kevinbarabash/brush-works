@@ -1,9 +1,17 @@
 const width = window.innerWidth;
 const height = window.innerHeight;
 
-const canvas = document.querySelector('canvas');
+const bgImg = document.createElement('img');
+bgImg.src = `https://placekitten.com/${width}/${height}`;
+bgImg.style = 'position:absolute;left:0;top:0';
+document.body.appendChild(bgImg);
+
+const canvas = document.createElement('canvas');
+canvas.style = 'position:absolute;left:0;top:0;';
 canvas.width = width;
 canvas.height = height;
+document.body.appendChild(canvas);
+
 const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true });
 gl.getExtension("OES_texture_float");
 gl.getExtension("OES_texture_float_linear");
@@ -27,7 +35,7 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
 gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.texture, 0);
 
 
-gl.clearColor(0., 0., 0., 1.);
+gl.clearColor(0., 0., 0., 0.);
 gl.clear(gl.COLOR_BUFFER_BIT);
 gl.viewport(0, 0, width, height);
 
@@ -221,13 +229,14 @@ const updateCanvas = () => {
 };
 
 downs.onValue((e) => {
+    e.preventDefault();
     color = [Math.random(), Math.random(), Math.random()];
     lastMousePoint = [e.pageX, height - e.pageY];
     lastPoint = [e.pageX, height - e.pageY];
 
     brushShader.useProgram();
 
-    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.SRC_ALPHA, gl.DST_ALPHA);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     // TODO: don't redraw the whole screen each time
     projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
@@ -259,7 +268,7 @@ const drags = downs.flatMap((event) => moves.takeUntilBy(ups));
 drags.onValue((e) => {
     brushShader.useProgram();
 
-    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.SRC_ALPHA, gl.DST_ALPHA);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     // TODO: don't redraw the whole screen each time
     projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
