@@ -26,10 +26,7 @@ const createAttrib = function(program, name) {
     }
 };
 
-const createProgram = function(path) {
-    const vertCode = load(`${path}/vert.glsl`);
-    const fragCode = load(`${path}/frag.glsl`);
-
+export function createProgram(gl, vertCode, fragCode) {
     const vertShader = createShader(vertCode, gl.VERTEX_SHADER);
     const fragShader = createShader(fragCode, gl.FRAGMENT_SHADER);
 
@@ -80,9 +77,9 @@ const createProgram = function(path) {
     };
 
     return shader;
-};
+}
 
-const createBuffer = function(target, data, usage) {
+export function createBuffer(gl, target, data, usage) {
     const buffer = gl.createBuffer();
     gl.bindBuffer(target, buffer);
     gl.bufferData(target, data, usage);
@@ -97,10 +94,10 @@ const createBuffer = function(target, data, usage) {
             gl.bufferData(target, data, usage);
         }
     };
-};
+}
 
 // TODO: use the babylon parser to grab type info
-const createTexture = function(target, format, width, height, options = {}) {
+export function createTexture(gl, target, format, width, height, options = {}) {
     const border = 0;
     const internalFormat = format;
     const level = 0;
@@ -129,10 +126,10 @@ const createTexture = function(target, format, width, height, options = {}) {
         },
         texture: texture
     };
-};
+}
 
 // image could be an Image, Canvas, or Video element
-const textureFromImage = function(target, format, type, image, options) {
+export function textureFromImage(gl, target, format, type, image, options) {
     options = options || {};
     const texture = gl.createTexture();
 
@@ -158,4 +155,4 @@ const textureFromImage = function(target, format, type, image, options) {
         },
         texture: texture
     };
-};
+}

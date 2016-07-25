@@ -1,5 +1,10 @@
+import {createProgram, createBuffer, createTexture} from './gl_helpers';
+const {ortho} = require('./math');
+
 const width = window.innerWidth;
 const height = window.innerHeight;
+
+console.log("hello, world!");
 
 const bgImg = document.createElement('img');
 bgImg.src = `https://placekitten.com/${width}/${height}`;
@@ -13,21 +18,24 @@ canvas.height = height;
 document.body.appendChild(canvas);
 
 const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true });
+window.gl = gl;
 gl.getExtension("OES_texture_float");
 gl.getExtension("OES_texture_float_linear");
 console.log(gl.getParameter(gl.VERSION));
 
-const brushShader = createProgram('src/brush');
+const brushVert = require('./brush/vert.glsl');
+const brushFrag = require('./brush/frag.glsl');
+const brushShader = createProgram(gl, brushVert, brushFrag);
 
 gl.enable(gl.BLEND);
 gl.disable(gl.DEPTH_TEST);
 gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-brushShader.buffers.pos = createBuffer(gl.ARRAY_BUFFER, new Float32Array([200, 200]), gl.STATIC_DRAW);
-brushShader.buffers.elements = createBuffer(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0]), gl.STATIC_DRAW);
+brushShader.buffers.pos = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array([200, 200]), gl.STATIC_DRAW);
+brushShader.buffers.elements = createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0]), gl.STATIC_DRAW);
 
 // create an empty texture
-var tex = createTexture(gl.TEXTURE_2D, gl.RGBA, width, height);
+var tex = createTexture(gl, gl.TEXTURE_2D, gl.RGBA, width, height);
 
 // create a fbo and attac the texture to it
 var fb = gl.createFramebuffer();
@@ -161,10 +169,13 @@ const range = function* (len) {
 
 curve([100, 50], [400, 300], [800, 100]);
 
-const copyShader = createProgram('src/copy');
-copyShader.buffers.pos = createBuffer(gl.ARRAY_BUFFER, new Float32Array([0, 0, width, 0, width, height, 0, height]), gl.STATIC_DRAW);
-copyShader.buffers.uv = createBuffer(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), gl.STATIC_DRAW);
-copyShader.buffers.elements = createBuffer(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 3]), gl.STATIC_DRAW);
+const copyVert = require('./copy/vert.glsl');
+const copyFrag = require('./copy/frag.glsl');
+const copyShader = createProgram(gl, copyVert, copyFrag);
+
+copyShader.buffers.pos = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array([0, 0, width, 0, width, height, 0, height]), gl.STATIC_DRAW);
+copyShader.buffers.uv = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), gl.STATIC_DRAW);
+copyShader.buffers.elements = createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 3]), gl.STATIC_DRAW);
 
 
 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -202,7 +213,7 @@ const downs = Kefir.fromEvents(document, 'mousedown');
 const moves = Kefir.fromEvents(document, 'mousemove');
 const ups = Kefir.fromEvents(document, 'mouseup');
 
-const updateCanvas = () => {
+const updateCanvas = (x, y) => {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     copyShader.useProgram();
@@ -252,7 +263,7 @@ downs.onValue((e) => {
 
     drawPoints(currentPoint);
 
-    updateCanvas();
+    updateCanvas(e.pageX, height - e.pageY);
 });
 
 ups.onValue((e) => {
@@ -271,8 +282,8 @@ drags.onValue((e) => {
     gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     // TODO: don't redraw the whole screen each time
-    projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
-    gl.viewport(0, 0, width, height);
+    // projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
+    // gl.viewport(0, 0, width, height);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.texture, 0);
@@ -292,5 +303,5 @@ drags.onValue((e) => {
     lastMouseMidpoint = midPoint;
     lastMousePoint = currentPoint;
 
-    updateCanvas();
+    updateCanvas(e.pageX, height - e.pageY);
 });

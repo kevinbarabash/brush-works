@@ -90,3 +90,10 @@ function translate(out, a, v) {
 
     return out;
 }
+
+module.exports = {
+    ortho,
+    create,
+    identity,
+    translate,
+};
