@@ -1,5 +1,5 @@
 import {createProgram, createBuffer, createTexture} from './gl_helpers';
-const {ortho} = require('./math');
+const {ortho, create, translate} = require('./math');
 
 const width = window.innerWidth;
 const height = window.innerHeight;
@@ -51,13 +51,19 @@ gl.viewport(0, 0, width, height);
 brushShader.useProgram();
 
 let projMatrix;
+let mvMatrix;
+let mvMatrix2;
 // TODO: instead of radius use line width/thickness
 let radius = 100;
 
 projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
+mvMatrix = create();
+mvMatrix2 = create();
+
 gl.viewport(0, 0, width, height);
 
 gl.uniformMatrix4fv(brushShader.uniforms.projMatrix, false, projMatrix);
+gl.uniformMatrix4fv(brushShader.uniforms.mvMatrix, false, mvMatrix2);
 gl.uniform3fv(brushShader.uniforms.uColor, [1., 0., 1.]);
 gl.uniform1f(brushShader.uniforms.uRadius, radius);
 
@@ -185,8 +191,10 @@ copyShader.useProgram();
 gl.blendFunc(gl.ONE, gl.ZERO);
 
 projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
+
 gl.viewport(0, 0, width, height);
 gl.uniformMatrix4fv(copyShader.uniforms.projMatrix, false, projMatrix);
+gl.uniformMatrix4fv(copyShader.uniforms.mvMatrix, false, mvMatrix);
 
 gl.activeTexture(gl.TEXTURE1);
 tex.bind();
@@ -213,6 +221,32 @@ const downs = Kefir.fromEvents(document, 'mousedown');
 const moves = Kefir.fromEvents(document, 'mousemove');
 const ups = Kefir.fromEvents(document, 'mouseup');
 
+let tool = 'brush';
+
+const keyState = {};
+const keydowns = Kefir.fromEvents(document, 'keydown').filter((e) => {
+    if (keyState[e.keyCode]) {
+        return false;
+    }
+    keyState[e.keyCode] = true;
+    return true;
+});
+const keyups = Kefir.fromEvents(document, 'keyup');
+
+keydowns.onValue((e) => {
+    console.log(e.keyCode);
+
+    if (e.keyCode === 32) {
+        tool = 'pan';
+    }
+});
+
+keyups.onValue((e) => {
+    keyState[e.keyCode] = false;
+
+    tool = 'brush';
+});
+
 const updateCanvas = (x, y) => {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
@@ -224,6 +258,7 @@ const updateCanvas = (x, y) => {
     // gl.viewport(x - radius, y - radius, 2 * radius, 2 * radius);
 
     gl.uniformMatrix4fv(copyShader.uniforms.projMatrix, false, projMatrix);
+    gl.uniformMatrix4fv(copyShader.uniforms.mvMatrix, false, mvMatrix);
 
     gl.activeTexture(gl.TEXTURE1);
     tex.bind();
@@ -241,67 +276,95 @@ const updateCanvas = (x, y) => {
 
 downs.onValue((e) => {
     e.preventDefault();
-    color = [Math.random(), Math.random(), Math.random()];
-    lastMousePoint = [e.pageX, height - e.pageY];
-    lastPoint = [e.pageX, height - e.pageY];
 
-    brushShader.useProgram();
-
-    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-
-    // TODO: don't redraw the whole screen each time
-    projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
-    gl.viewport(0, 0, width, height);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.texture, 0);
-
-    gl.uniformMatrix4fv(brushShader.uniforms.projMatrix, false, projMatrix);
-    gl.uniform3fv(brushShader.uniforms.uColor, color);
-
+    // TODO(kevinb) rename this as currentMousePoint
     const currentPoint = [e.pageX, height - e.pageY];
 
-    drawPoints(currentPoint);
+    if (tool === 'brush') {
+        color = [Math.random(), Math.random(), Math.random()];
 
-    updateCanvas(e.pageX, height - e.pageY);
+        // TODO(kevinb) relabel these as lastBrushPoint
+        lastPoint = [e.pageX, height - e.pageY];
+
+        brushShader.useProgram();
+
+        gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        // TODO: don't redraw the whole screen each time
+        projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
+        gl.viewport(0, 0, width, height);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.texture, 0);
+
+        gl.uniformMatrix4fv(brushShader.uniforms.projMatrix, false, projMatrix);
+        gl.uniformMatrix4fv(brushShader.uniforms.mvMatrix, false, mvMatrix2);
+        gl.uniform3fv(brushShader.uniforms.uColor, color);
+
+        drawPoints(currentPoint);
+
+        updateCanvas(e.pageX, height - e.pageY);
+    }
+
+    lastMousePoint = [e.pageX, height - e.pageY];
 });
 
 ups.onValue((e) => {
-    const currentPoint = [e.pageX, height - e.pageY];
-    lastPoint = line(lastMousePoint, currentPoint);
+    if (tool === 'brush') {
+        const currentPoint = [e.pageX, height - e.pageY];
+        lastPoint = line(lastMousePoint, currentPoint);
+        lastMouseMidpoint = null;
+    }
+
     lastMousePoint = null;
-    lastMouseMidpoint = null;
 });
 
 // TODO: filter out points that are too close
 const drags = downs.flatMap((event) => moves.takeUntilBy(ups));
 
 drags.onValue((e) => {
-    brushShader.useProgram();
-
-    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-
-    // TODO: don't redraw the whole screen each time
-    // projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
-    // gl.viewport(0, 0, width, height);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.texture, 0);
-
-    gl.uniformMatrix4fv(brushShader.uniforms.projMatrix, false, projMatrix);
-    gl.uniform3fv(brushShader.uniforms.uColor, color);
-
     const currentPoint = [e.pageX, height - e.pageY];
-    const midPoint = [(lastMousePoint[0] + currentPoint[0])/2, (lastMousePoint[1] + currentPoint[1])/2];
 
-    if (!lastMouseMidpoint) {
-        lastPoint = line(lastMousePoint, midPoint);
-    } else {
-        lastPoint = curve(lastMouseMidpoint, lastMousePoint, midPoint, lastPoint);
+    if (tool === 'pan') {
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        const dx = currentPoint[0] - lastMousePoint[0];
+        const dy = currentPoint[1] - lastMousePoint[1];
+
+        translate(mvMatrix, mvMatrix, [dx, dy, 0]);
+        translate(mvMatrix2, mvMatrix2, [-dx, -dy, 0]);
+
+        updateCanvas(e.pageX, height - e.pageY);
+
+    } else if (tool === 'brush') {
+        brushShader.useProgram();
+
+        gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        // TODO: don't redraw the whole screen each time
+        // projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
+        // gl.viewport(0, 0, width, height);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.texture, 0);
+
+        gl.uniformMatrix4fv(brushShader.uniforms.projMatrix, false, projMatrix);
+        gl.uniformMatrix4fv(brushShader.uniforms.mvMatrix, false, mvMatrix2);
+
+        gl.uniform3fv(brushShader.uniforms.uColor, color);
+
+        const midPoint = [(lastMousePoint[0] + currentPoint[0])/2, (lastMousePoint[1] + currentPoint[1])/2];
+
+        if (!lastMouseMidpoint) {
+            lastPoint = line(lastMousePoint, midPoint);
+        } else {
+            lastPoint = curve(lastMouseMidpoint, lastMousePoint, midPoint, lastPoint);
+        }
+
+        lastMouseMidpoint = midPoint;
+
+        updateCanvas(e.pageX, height - e.pageY);
     }
 
-    lastMouseMidpoint = midPoint;
     lastMousePoint = currentPoint;
-
-    updateCanvas(e.pageX, height - e.pageY);
 });
