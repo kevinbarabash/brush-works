@@ -1,15 +1,8 @@
-import {createProgram, createBuffer, createTexture} from './gl_helpers';
+import {createProgram, createBuffer, createTexture, textureFromImage} from './gl_helpers';
 const {ortho, create, translate} = require('./math');
 
-const width = window.innerWidth;
-const height = window.innerHeight;
-
-console.log("hello, world!");
-
-const bgImg = document.createElement('img');
-bgImg.src = `https://placekitten.com/${width}/${height}`;
-bgImg.style = 'position:absolute;left:0;top:0';
-document.body.appendChild(bgImg);
+const width = 783;
+const height = 801;
 
 const canvas = document.createElement('canvas');
 canvas.style = 'position:absolute;left:0;top:0;';
@@ -23,6 +16,56 @@ gl.getExtension("OES_texture_float");
 gl.getExtension("OES_texture_float_linear");
 console.log(gl.getParameter(gl.VERSION));
 
+const layers = [];
+
+const loadImageVert = require('./load_image/vert.glsl');
+const loadImageFrag = require('./load_image/frag.glsl');
+const loadImageShader = createProgram(gl, loadImageVert, loadImageFrag);
+
+const bgImg = document.createElement('img');
+bgImg.onload = function() {
+    const layer0 = createTexture(gl, gl.TEXTURE_2D, gl.RGBA, width, height);
+    const imageTexture = textureFromImage(gl, gl.TEXTURE_2D, gl.RGBA, gl.FLOAT, bgImg);
+
+    var fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, layer0.texture, 0);
+
+    loadImageShader.buffers.pos = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array([0, 0, width, 0, width, height, 0, height]), gl.STATIC_DRAW);
+    loadImageShader.buffers.uv = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array([0, 1, 1, 1, 1, 0, 0, 0]), gl.STATIC_DRAW);
+    loadImageShader.buffers.elements = createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 3]), gl.STATIC_DRAW);
+
+    loadImageShader.useProgram();
+
+    gl.blendFunc(gl.ONE, gl.ZERO);
+
+    projMatrix = ortho([], 0, width, 0, height, 1, -1);    // near z is positive
+
+    gl.viewport(0, 0, width, height);
+    gl.uniformMatrix4fv(loadImageShader.uniforms.projMatrix, false, projMatrix);
+    gl.uniformMatrix4fv(loadImageShader.uniforms.mvMatrix, false, mvMatrix);
+
+    gl.activeTexture(gl.TEXTURE1);
+    imageTexture.bind();
+    gl.uniform1i(loadImageShader.uniforms.uSampler, 1);
+
+    loadImageShader.buffers.pos.bind();
+    loadImageShader.attributes.pos.pointer(2, gl.FLOAT, false, 0, 0);
+
+    loadImageShader.buffers.uv.bind();
+    loadImageShader.attributes.uv.pointer(2, gl.FLOAT, false, 0, 0);
+
+    loadImageShader.buffers.elements.bind();
+    gl.drawElements(gl.TRIANGLE_FAN, 4, gl.UNSIGNED_SHORT, 0);
+
+    // TODO(kevinb) create a shader that converts and image from RGB to XYZ
+    layers.unshift(layer0);
+    updateCanvas(0, 0);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+};
+bgImg.src = 'src/801.jpg';
+
 const brushVert = require('./brush/vert.glsl');
 const brushFrag = require('./brush/frag.glsl');
 const brushShader = createProgram(gl, brushVert, brushFrag);
@@ -34,13 +77,13 @@ gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_
 brushShader.buffers.pos = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array([200, 200]), gl.STATIC_DRAW);
 brushShader.buffers.elements = createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0]), gl.STATIC_DRAW);
 
-// create an empty texture
-var tex = createTexture(gl, gl.TEXTURE_2D, gl.RGBA, width, height);
+var layer1 = createTexture(gl, gl.TEXTURE_2D, gl.RGBA, width, height);
+layers.push(layer1);
 
 // create a fbo and attac the texture to it
 var fb = gl.createFramebuffer();
 gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.texture, 0);
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, layer1.texture, 0);
 
 
 gl.clearColor(0., 0., 0., 0.);
@@ -197,7 +240,7 @@ gl.uniformMatrix4fv(copyShader.uniforms.projMatrix, false, projMatrix);
 gl.uniformMatrix4fv(copyShader.uniforms.mvMatrix, false, mvMatrix);
 
 gl.activeTexture(gl.TEXTURE1);
-tex.bind();
+layer1.bind();
 gl.uniform1i(copyShader.uniforms.uSampler, 1);
 
 copyShader.buffers.pos.bind();
@@ -249,29 +292,33 @@ keyups.onValue((e) => {
 
 const updateCanvas = (x, y) => {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
     copyShader.useProgram();
 
-    gl.blendFunc(gl.ONE, gl.ZERO);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     // projMatrix = ortho([], x - radius, x + radius, y - radius, y + radius, 1, -1);    // near z is positive
     // gl.viewport(x - radius, y - radius, 2 * radius, 2 * radius);
 
-    gl.uniformMatrix4fv(copyShader.uniforms.projMatrix, false, projMatrix);
-    gl.uniformMatrix4fv(copyShader.uniforms.mvMatrix, false, mvMatrix);
+    // TODO(kevinb): render all layers within the shader so that we can blend colors correctly
+    for (const layer of layers) {
+        gl.uniformMatrix4fv(copyShader.uniforms.projMatrix, false, projMatrix);
+        gl.uniformMatrix4fv(copyShader.uniforms.mvMatrix, false, mvMatrix);
 
-    gl.activeTexture(gl.TEXTURE1);
-    tex.bind();
-    gl.uniform1i(copyShader.uniforms.uSampler, 1);
+        gl.activeTexture(gl.TEXTURE1);
+        layer.bind();
+        gl.uniform1i(copyShader.uniforms.uSampler, 1);
 
-    copyShader.buffers.pos.bind();
-    copyShader.attributes.pos.pointer(2, gl.FLOAT, false, 0, 0);
+        copyShader.buffers.pos.bind();
+        copyShader.attributes.pos.pointer(2, gl.FLOAT, false, 0, 0);
 
-    copyShader.buffers.uv.bind();
-    copyShader.attributes.uv.pointer(2, gl.FLOAT, false, 0, 0);
+        copyShader.buffers.uv.bind();
+        copyShader.attributes.uv.pointer(2, gl.FLOAT, false, 0, 0);
 
-    copyShader.buffers.elements.bind();
-    gl.drawElements(gl.TRIANGLE_FAN, 4, gl.UNSIGNED_SHORT, 0);
+        copyShader.buffers.elements.bind();
+        gl.drawElements(gl.TRIANGLE_FAN, 4, gl.UNSIGNED_SHORT, 0);
+    }
 };
 
 downs.onValue((e) => {
@@ -295,7 +342,7 @@ downs.onValue((e) => {
         gl.viewport(0, 0, width, height);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.texture, 0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, layer1.texture, 0);
 
         gl.uniformMatrix4fv(brushShader.uniforms.projMatrix, false, projMatrix);
         gl.uniformMatrix4fv(brushShader.uniforms.mvMatrix, false, mvMatrix2);
@@ -346,7 +393,7 @@ drags.onValue((e) => {
         // gl.viewport(0, 0, width, height);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.texture, 0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, layer1.texture, 0);
 
         gl.uniformMatrix4fv(brushShader.uniforms.projMatrix, false, projMatrix);
         gl.uniformMatrix4fv(brushShader.uniforms.mvMatrix, false, mvMatrix2);
