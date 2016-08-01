@@ -44,6 +44,7 @@ export function createProgram(gl, vertCode, fragCode) {
         uniforms: {},
         attributes: {},
         buffers: {},
+        program: program,
     };
 
     var matches;
