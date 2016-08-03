@@ -1,6 +1,5 @@
 // TODO(kevinb) create a Brush object
 // different brushes can have different settings
-// -
 class Brush {
     constructor(gl, shader) {
         this.radius = 100;
@@ -12,6 +11,8 @@ class Brush {
 
         const program = gl.getParameter(gl.CURRENT_PROGRAM);
         gl.useProgram(shader.program);
+        // gl.uniformMatrix4fv(shader.uniforms.projMatrix, false, projMatrix);
+        // gl.uniformMatrix4fv(shader.uniforms.mvMatrix, false, mvMatrix2);
         gl.uniform1f(shader.uniforms.uRadius, this.radius);
         gl.uniform3fv(shader.uniforms.uColor, this.color);
         gl.useProgram(program);

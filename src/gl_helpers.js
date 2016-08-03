@@ -98,23 +98,21 @@ export function createBuffer(gl, target, data, usage) {
 }
 
 // TODO: use the babylon parser to grab type info
-export function createTexture(gl, target, format, width, height, options = {}) {
+export function createTexture(gl, format, width, height) {
     const border = 0;
     const internalFormat = format;
     const level = 0;
     const type = gl.FLOAT; // TODO: try out the floating point extension
-    const pixels = options.pixels || null;  // ArrayBufferView
+    const pixels = null;  // or ArrayBufferView
 
-    var texture = gl.createTexture();
+    const texture = gl.createTexture();
 
+    const target = gl.TEXTURE_2D;
     gl.bindTexture(target, texture);
 
-    const minFilter = options.minFilter || gl.LINEAR;
-    const magFilter = options.magFilter || gl.LINEAR;
-
     gl.texImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
-    gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, minFilter);
-    gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter);
+    gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
@@ -126,6 +124,26 @@ export function createTexture(gl, target, format, width, height, options = {}) {
             gl.bindTexture(target, texture);
         },
         texture: texture
+    };
+}
+
+
+// TODO: add method to get current layer
+// requires storing a dictionary between framebuffer id and layer objects
+
+export function createLayer(gl, format, width, height) {
+    const texture = createTexture(gl, format, width, height);
+
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture.texture, 0);
+
+    return {
+        setDrawable() {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+        },
+        texture: texture,
+        framebuffer: fb,
     };
 }
 
