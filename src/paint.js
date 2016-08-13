@@ -1,6 +1,7 @@
 import {createProgram, createBuffer, createLayer, textureFromImage} from './gl_helpers';
 import {ortho, create, translate} from './math';
 import {Brush} from './brush';
+import {loadImage} from './image_loader';
 
 import Globals from './globals';
 
@@ -47,42 +48,17 @@ loadImageShader.buffers.pos = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array
 loadImageShader.buffers.uv = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array([0, 1, 1, 1, 1, 0, 0, 0]), gl.STATIC_DRAW);
 loadImageShader.buffers.elements = createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 3]), gl.STATIC_DRAW);
 
-const bgImg = document.createElement('img');
-bgImg.onload = function() {
-    gl.blendFunc(gl.ONE, gl.ZERO);  // image loading blend function
 
-    const layer0 = createLayer(gl, gl.RGBA, width, height);
-    const imageTexture = textureFromImage(gl, gl.TEXTURE_2D, gl.RGBA, gl.FLOAT, bgImg);
-
-    layer0.setDrawable();
-
-    loadImageShader.useProgram();
-
-    // all shaders should grab the current projection and model view matrices
-    // before rendering
-    gl.uniformMatrix4fv(loadImageShader.uniforms.projMatrix, false, Globals.projectionMatrix);
-    gl.uniformMatrix4fv(loadImageShader.uniforms.mvMatrix, false, Globals.modelViewMatrix);
-
-    gl.activeTexture(gl.TEXTURE1);
-    imageTexture.bind();
-    gl.uniform1i(loadImageShader.uniforms.uSampler, 1);
-
-    loadImageShader.buffers.pos.bind();
-    loadImageShader.attributes.pos.pointer(2, gl.FLOAT, false, 0, 0);
-
-    loadImageShader.buffers.uv.bind();
-    loadImageShader.attributes.uv.pointer(2, gl.FLOAT, false, 0, 0);
-
-    loadImageShader.buffers.elements.bind();
-    gl.drawElements(gl.TRIANGLE_FAN, 4, gl.UNSIGNED_SHORT, 0);
+const layer0 = createLayer(gl, gl.RGBA, width, height);
+loadImage(gl, 'images/cat.jpg').then((image) => {
+    layer0.drawTexture(image, 0, 0);
 
     layers.unshift(layer0);
     updateCanvas(0, 0);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-};
+});
 
-bgImg.src = 'src/801.jpg';
 
 const brushVert = require('./brush/vert.glsl');
 const brushFrag = require('./brush/frag.glsl');
